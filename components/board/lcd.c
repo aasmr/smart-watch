@@ -62,13 +62,23 @@ static void lcd_send_line_finish(spi_device_handle_t *spi)
     }
 }
 
-static void parline_fill(uint16_t* lines, uint16_t color)
+static void parline_fill_color(uint16_t* lines, uint16_t color)
 {
     for (int x = 0; x < 240*PARALLEL_LINES; x++)
     {
     	*lines = color;
     	//printf("ADDR: %u\n", (unsigned int) lines);
     	lines++;
+    }
+}
+
+static void parline_fill_image(uint16_t* lines, uint16_t* image)
+{
+    for (int x = 0; x < 240*PARALLEL_LINES; x++)
+    {
+    	*lines = *image;
+    	lines++;
+    	image++;
     }
 }
 
@@ -97,7 +107,7 @@ void lcd_cmd(spi_device_handle_t spi, const uint8_t cmd, bool keep_cs_active)
     assert(ret == ESP_OK);          //Should have had no issues.
 }
 
-void lcd_data(spi_device_handle_t spi, const uint8_t *data, int len)
+void lcd_data(spi_device_handle_t spi, const uint8_t* data, int len)
 {
     esp_err_t ret;
     spi_transaction_t trans;
@@ -112,7 +122,7 @@ void lcd_data(spi_device_handle_t spi, const uint8_t *data, int len)
     assert(ret == ESP_OK);          //Should have had no issues.
 }
 
-void lcd_init_seq(spi_device_handle_t* spi, lcd_init_cmd_t *cmd_init)
+void lcd_init_seq(spi_device_handle_t* spi, lcd_init_cmd_t* cmd_init)
 {
 	uint8_t cmd = 0;
 	while (cmd_init[cmd].cmd_len != 0xFF)
@@ -135,6 +145,159 @@ void lcd_init_seq(spi_device_handle_t* spi, lcd_init_cmd_t *cmd_init)
 	}
 }
 
+void lcd_draw_all(spi_device_handle_t* spi, uint16_t* image)
+{
+	uint16_t *lines[240/PARALLEL_LINES];
+	int sending_line = -1;
+	esp_err_t ret;
+	int x;
+	//Transaction descriptors. Declared static so they're not allocated on the stack; we need this memory even when this
+	//function is finished because the SPI driver needs access to it even while we're already calculating the next line.
+	static spi_transaction_t trans[6];
+
+	//In theory, it's better to initialize trans and data only once and hang on to the initialized
+	//variables. We allocate them on the stack, so we need to re-init them each call.
+	for (x = 0; x < 6; x++)
+	{
+		memset(&trans[x], 0, sizeof(spi_transaction_t));
+		if ((x & 1) == 0) {
+			//Even transfers are commands
+			trans[x].length = 8;
+			trans[x].user = (void*)0;
+		} else {
+			//Odd transfers are data
+			trans[x].length = 8 * 4;
+			trans[x].user = (void*)1;
+		}
+		trans[x].flags = SPI_TRANS_USE_TXDATA;
+	}
+	trans[5].flags = 0;
+
+	trans[0].tx_data[0] = 0x2A;         //Column Address Set
+	trans[1].tx_data[0] = 0;            //Start Col High
+	trans[1].tx_data[1] = 0;            //Start Col Low
+	trans[1].tx_data[2] = 0;   //End Col High
+	trans[1].tx_data[3] = ((uint16_t)(239)) & 0xff; //End Col Low
+	trans[2].tx_data[0] = 0x2B;         //Page address set
+	trans[3].tx_data[0] = 0;    //Start page high
+	trans[4].tx_data[0] = 0x2C;         //memory write
+	trans[5].length = 240 * 2 * 8 * PARALLEL_LINES;  //Data length, in bits
+
+
+	for(int i = 0; i<240/PARALLEL_LINES; i++)
+	{
+		lines[i] = heap_caps_malloc(240 * PARALLEL_LINES * sizeof(uint16_t), MALLOC_CAP_DMA);
+		assert(lines[i] != NULL);
+		parline_fill_image(lines[i], image);
+	}
+	for (uint16_t y = 0; y < 240; y += PARALLEL_LINES)
+	{
+		//Finish up the sending process of the previous line, if any
+		if (sending_line != -1)
+		{
+			//vTaskDelay(100 / portTICK_PERIOD_MS);
+			lcd_send_line_finish(spi);
+		}
+		//Swap sending_line and calc_line
+		sending_line++;
+		//Send the line we currently calculated.
+
+		trans[3].tx_data[1] = y & 0xff;  //start page low
+		trans[3].tx_data[2] = (y + PARALLEL_LINES-1) >> 8; //end page high
+		trans[3].tx_data[3] = (y + PARALLEL_LINES-1) & 0xff; //end page low
+		trans[5].tx_buffer = lines[sending_line];      //finally send the line data
+		//Queue all transactions.
+		for (x = 0; x < 6; x++) {
+			ret = spi_device_queue_trans(*spi, &trans[x], portMAX_DELAY);
+			assert(ret == ESP_OK);
+		}
+		//The line set is queued up for sending now; the actual sending happens in the
+		//background. We can go on to calculate the next line set as long as we do not
+		//touch line[sending_line]; the SPI sending process is still reading from that.
+	}
+	lcd_send_line_finish(spi);
+	for(int i = 0; i<240/PARALLEL_LINES; i++)
+	{
+		heap_caps_free(lines[i]);
+	}
+}
+
+void lcd_draw_part(spi_device_handle_t* spi, uint16_t color, uint8_t start_x, uint8_t start_y, uint8_t w, uint8_t h, uint16_t* image)
+{
+	uint16_t *lines[h/PARALLEL_LINES];
+	int sending_line = -1;
+    esp_err_t ret;
+    int x;
+    //Transaction descriptors. Declared static so they're not allocated on the stack; we need this memory even when this
+    //function is finished because the SPI driver needs access to it even while we're already calculating the next line.
+    static spi_transaction_t trans[6];
+
+    //In theory, it's better to initialize trans and data only once and hang on to the initialized
+    //variables. We allocate them on the stack, so we need to re-init them each call.
+    for (x = 0; x < 6; x++)
+    {
+        memset(&trans[x], 0, sizeof(spi_transaction_t));
+        if ((x & 1) == 0) {
+            //Even transfers are commands
+            trans[x].length = 8;
+            trans[x].user = (void*)0;
+        } else {
+            //Odd transfers are data
+            trans[x].length = 8 * 4;
+            trans[x].user = (void*)1;
+        }
+        trans[x].flags = SPI_TRANS_USE_TXDATA;
+    }
+    trans[5].flags = 0;
+
+    trans[0].tx_data[0] = 0x2A;         //Column Address Set
+    trans[1].tx_data[0] = 0;            //Start Col High
+    trans[1].tx_data[1] = 0;            //Start Col Low
+    trans[1].tx_data[2] = 0;   //End Col High
+    trans[1].tx_data[3] = ((uint16_t)(239)) & 0xff; //End Col Low
+    trans[2].tx_data[0] = 0x2B;         //Page address set
+    trans[3].tx_data[0] = 0;    //Start page high
+    trans[4].tx_data[0] = 0x2C;         //memory write
+    trans[5].length = 240 * 2 * 8 * PARALLEL_LINES;  //Data length, in bits
+
+
+	for(int i = 0; i<240/PARALLEL_LINES; i++)
+	{
+		lines[i] = heap_caps_malloc(240 * PARALLEL_LINES * sizeof(uint16_t), MALLOC_CAP_DMA);
+		assert(lines[i] != NULL);
+		parline_fill_image(lines[i], image);
+	}
+    for (uint16_t y = 0; y < 240; y += PARALLEL_LINES)
+    {
+        //Finish up the sending process of the previous line, if any
+        if (sending_line != -1)
+        {
+        	//vTaskDelay(100 / portTICK_PERIOD_MS);
+            lcd_send_line_finish(spi);
+        }
+        //Swap sending_line and calc_line
+        sending_line++;
+        //Send the line we currently calculated.
+
+        trans[3].tx_data[1] = y & 0xff;  //start page low
+        trans[3].tx_data[2] = (y + PARALLEL_LINES-1) >> 8; //end page high
+        trans[3].tx_data[3] = (y + PARALLEL_LINES-1) & 0xff; //end page low
+        trans[5].tx_buffer = lines[sending_line];      //finally send the line data
+        //Queue all transactions.
+        for (x = 0; x < 6; x++) {
+            ret = spi_device_queue_trans(*spi, &trans[x], portMAX_DELAY);
+            assert(ret == ESP_OK);
+        }
+        //The line set is queued up for sending now; the actual sending happens in the
+        //background. We can go on to calculate the next line set as long as we do not
+        //touch line[sending_line]; the SPI sending process is still reading from that.
+    }
+    lcd_send_line_finish(spi);
+    for(int i = 0; i<240/PARALLEL_LINES; i++)
+    {
+    	heap_caps_free(lines[i]);
+    }
+}
 void lcd_clear(spi_device_handle_t* spi, uint16_t color)
 {
 	uint16_t *lines[240/PARALLEL_LINES];
@@ -178,7 +341,7 @@ void lcd_clear(spi_device_handle_t* spi, uint16_t color)
 	{
 		lines[i] = heap_caps_malloc(240 * PARALLEL_LINES * sizeof(uint16_t), MALLOC_CAP_DMA);
 		assert(lines[i] != NULL);
-		parline_fill(lines[i], color);
+		parline_fill_color(lines[i], color);
 	}
     for (uint16_t y = 0; y < 240; y += PARALLEL_LINES)
     {
@@ -295,12 +458,10 @@ void lcd_set_bgnd(spi_device_handle_t* spi)
     }
 }
 */
-void lcd_init()
+void lcd_init(spi_device_handle_t* spi)
 {
-	spi_device_handle_t spi;
-	spi_config(&spi);
 
-	DRAM_ATTR static const lcd_init_cmd_t lcd_init_cmds[] = {
+	DRAM_ATTR static lcd_init_cmd_t lcd_init_cmds[] = {
 			{0xEF, {0x00},  0},
 			{0xEB, {0x14},  1},
 			{0xFE, {0x00},  0},
@@ -392,6 +553,6 @@ void lcd_init()
 
 	lcd_reset();
 	vTaskDelay(100 / portTICK_PERIOD_MS);
-	lcd_init_seq(&spi, &lcd_init_cmds);
-	lcd_clear(&spi, BLACK);
+	lcd_init_seq(spi, lcd_init_cmds);
+	lcd_clear(spi, BLACK);
 }
