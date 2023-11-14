@@ -9,7 +9,6 @@
 #define COMPONENTS_MCU_PEREFERIAL_SPI_H_
 
 #include <stdio.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>

@@ -2,22 +2,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include <freertos/task.h>
 #include "../components/mcu_pheripheral/spi.h"
-//#include "esp_wifi.h"
-//#include "esp_system.h"
-//#include "esp_event.h"
-//#include "esp_event_loop.h"
-//#include "nvs_flash.h"
 #include <dirent.h>
 #include "driver/gpio.h"
 #include "driver/gptimer.h"
 #include "lcd.h"
-#include "esp_spiffs.h"
-#include "spiffs_config.h"
+#include "spiffs.h"
 
 static const char *TAG = "main";
 
@@ -58,6 +51,44 @@ void tim_init(gptimer_handle_t* tim)
 	ESP_ERROR_CHECK(gptimer_set_alarm_action(*tim, &alarm_config));
 }
 
+uint16_t* merging_layers(uint16_t* img1, uint32_t* img2, uint8_t w, uint8_t h)
+{
+	uint16_t *sum_img;
+
+	sum_img = (uint16_t*) heap_caps_malloc(w*h*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+
+	int y, x;
+	float a, r, g, b;
+	uint16_t old_color;
+	uint16_t new_color;
+
+	for(y = 0; y < h; y++)
+	{
+		for(x = 0; x < w; x++)
+		{
+			a = (float)((img2[w*y+x] >> 8) & 0xFF);
+			old_color = (img2[w*y+x] >> 16) & 0xFF;
+			old_color = ((old_color >> 8) & 0xFF) + ((old_color & 0xFF) << 8);
+			b = (float)((old_color >> 11) & 0x1F);
+			g = (float)((old_color >> 5) & 0x3F);
+			r = (float)((old_color >> 0) & 0x1F);
+
+			if( a!= 0 )
+			{
+				new_color = (((uint16_t)(r*(a/255))&0x1F) + (((uint16_t)(g*(a/255))&0x3F) << 5) + (((uint16_t)(b*(a/255))&0x1F) << 11));
+				new_color = ((new_color >> 8) & 0xFF) + ((new_color & 0xFF) << 8);
+				sum_img[w*y+x] = new_color;
+			}
+			else
+			{
+				sum_img[w*y+x] = img1[w*y+x];
+			}
+		}
+	}
+
+	return sum_img;
+}
+
 void app_main(void)
 {
 	//Init pereferial
@@ -83,46 +114,7 @@ void app_main(void)
 	//ESP_ERROR_CHECK(gptimer_start(tim));
 
 	lcd_init(&spi);
-
-	ESP_LOGI(TAG, "Initializing SPIFFS");
-
-	esp_vfs_spiffs_conf_t conf = {
-			.base_path = "/spiffs",
-			.partition_label = NULL,
-			.max_files = 10,
-			.format_if_mount_failed = true
-	  };
-
-	esp_err_t ret = esp_vfs_spiffs_register(&conf);
-
-	if (ret != ESP_OK)
-	{
-		if (ret == ESP_FAIL)
-		{
-			ESP_LOGE(TAG, "Failed to mount or format filesystem");
-		}
-		else if (ret == ESP_ERR_NOT_FOUND)
-		{
-			ESP_LOGE(TAG, "Failed to find SPIFFS partition");
-		}
-		else
-		{
-			ESP_LOGE(TAG, "Failed to initialize SPIFFS (%s)", esp_err_to_name(ret));
-	    }
-
-		return;
-	}
-
-	size_t total = 0, used = 0;
-	ret = esp_spiffs_info(conf.partition_label, &total, &used);
-	if (ret != ESP_OK)
-	{
-		ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s)", esp_err_to_name(ret));
-	}
-	else
-	{
-		ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
-	}
+	spiffs_init();
 
 	FILE* f;
 	ESP_LOGI(TAG, "Opening file");
@@ -134,15 +126,57 @@ void app_main(void)
 	}
 
 	uint8_t header[5];
-	fread(header,sizeof(header),1,f);
-	printf("%hhu\n", header[0]);
-	uint16_t *image;
-	image = (uint16_t*) heap_caps_malloc(240*240*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
-	assert(image != NULL);
+	fread(header, sizeof(header), 1, f);
+	uint16_t *cyfer;
+	cyfer = (uint16_t*) heap_caps_malloc(240*240*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	assert(cyfer != NULL);
 	ESP_LOGI(TAG, "malloc ok");
+	fread(cyfer, 2*240*240, 1, f);
+	fclose(f);
+	memset(header, 0, sizeof(header));
+	lcd_draw_all(&spi, cyfer);
 
-	fread(image, 2*240*240, 1, f);
+	ESP_LOGI(TAG, "Opening file");
+	f = fopen("/spiffs/sec", "rb");
+	if (f == NULL)
+	{
+		ESP_LOGE(TAG, "Failed to open file for reading");
+	    return;
+	}
 
-	printf("%hu\n", image[240*5+113]);
-	lcd_draw_all(&spi, image);
+	fread(header,sizeof(header),1,f);
+	printf("%hu\n", header[0]);
+	printf("%hu\n", header[1]);
+	printf("%hu\n", header[2]);
+	printf("%hu\n", header[3]);
+	printf("%hu\n", header[4]);
+	uint32_t *sec;
+	sec = (uint32_t*) heap_caps_malloc(header[0]*header[1]*sizeof(uint32_t), MALLOC_CAP_SPIRAM);
+	assert(sec != NULL);
+	ESP_LOGI(TAG, "malloc ok");
+	fread(sec, 4*header[0]*header[1], 1, f);
+	fclose(f);
+
+	printf("%u\n", (unsigned int)sec[16]);
+
+	uint16_t *mrg_img;
+	uint16_t *part_bg;
+	part_bg = (uint16_t*) heap_caps_malloc(header[0]*header[1]*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	uint8_t x, y, start_x, start_y;
+	uint32_t i;
+	i = 0;
+	start_x = 120-header[3];
+	start_y = 120-header[4];
+	for (y = start_y; y < start_y + header[1]; y++)
+	{
+		for (x = start_x; x < start_x + header[0]; x++)
+		{
+			part_bg[i] = cyfer[240*y+x];
+			i++;
+		}
+	}
+	mrg_img = merging_layers(part_bg, sec, header[0], header[1]);
+
+	lcd_draw_all(&spi, cyfer);
+	lcd_draw_part_wo_lines(&spi, start_x, start_y, header[0], header[1], mrg_img);
 }

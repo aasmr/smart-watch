@@ -69,6 +69,7 @@ if __name__ == '__main__':
                 strelka_arr.append(to_argb8565_esp32([0, 0, 0, 0]))
             else:
                 strelka_arr.append(to_argb8565_esp32(strelka[x, y]))
+    
 
     bg_arr = []
     bg_arr.append(240)
@@ -101,3 +102,4 @@ if __name__ == '__main__':
         f.write(strelka_arr[4].to_bytes(1, byteorder='big'))
         for i in strelka_arr[5:]:
                 f.write(i.to_bytes(4, byteorder='big'))
+        print(strelka_arr[21])

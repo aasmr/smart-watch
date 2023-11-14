@@ -176,10 +176,10 @@ void lcd_draw_all(spi_device_handle_t* spi, uint16_t* image)
 	trans[0].tx_data[0] = 0x2A;         //Column Address Set
 	trans[1].tx_data[0] = 0;            //Start Col High
 	trans[1].tx_data[1] = 0;            //Start Col Low
-	trans[1].tx_data[2] = 0;   //End Col High
+	trans[1].tx_data[2] = 0;   			//End Col High
 	trans[1].tx_data[3] = ((uint16_t)(239)) & 0xff; //End Col Low
 	trans[2].tx_data[0] = 0x2B;         //Page address set
-	trans[3].tx_data[0] = 0;    //Start page high
+	trans[3].tx_data[0] = 0;    		//Start page high
 	trans[4].tx_data[0] = 0x2C;         //memory write
 	trans[5].length = 240 * 2 * 8 * PARALLEL_LINES;  //Data length, in bits
 
@@ -222,19 +222,68 @@ void lcd_draw_all(spi_device_handle_t* spi, uint16_t* image)
 		heap_caps_free(lines[i]);
 	}
 }
+void lcd_draw_part_wo_lines(spi_device_handle_t* spi, uint8_t start_x, uint8_t start_y, uint8_t w, uint8_t h, uint16_t* image)
+{
+	uint16_t *send_img;
+	esp_err_t ret;
+	int x;
 
+	static spi_transaction_t trans[6];
+
+	for (x = 0; x < 6; x++)
+	{
+		memset(&trans[x], 0, sizeof(spi_transaction_t));
+		if ((x & 1) == 0) {
+			//Even transfers are commands
+			trans[x].length = 8;
+			trans[x].user = (void*)0;
+		} else {
+			//Odd transfers are data
+			trans[x].length = 8 * 4;
+			trans[x].user = (void*)1;
+		}
+		trans[x].flags = SPI_TRANS_USE_TXDATA;
+	}
+	trans[5].flags = 0;
+
+	trans[0].tx_data[0] = 0x2A;         	//Column Address Set
+	trans[1].tx_data[0] = 0;            	//Start Col High
+	trans[1].tx_data[1] = start_x;      	//Start Col Low
+	trans[1].tx_data[2] = 0;   				//End Col High
+	trans[1].tx_data[3] = start_x + w - 1;	//End Col Low
+	trans[2].tx_data[0] = 0x2B;         	//Page address set
+	trans[3].tx_data[0] = 0;    			//Start page high
+	trans[3].tx_data[1] = start_y;    		//Start page low
+	trans[3].tx_data[2] = 0;    			//End page high
+	trans[3].tx_data[3] = start_y + h - 1;   //End page low
+	trans[4].tx_data[0] = 0x2C;         	//memory write
+	trans[5].length = w  *h * 2 * 8;  		//Data length, in bits
+
+	send_img = heap_caps_malloc(240 * PARALLEL_LINES * sizeof(uint16_t), MALLOC_CAP_DMA);
+	assert(send_img != NULL);
+	parline_fill_image(send_img, image);
+
+
+	trans[5].tx_buffer = send_img;
+
+	for (x = 0; x < 6; x++)
+	{
+		ret = spi_device_queue_trans(*spi, &trans[x], portMAX_DELAY);
+		assert(ret == ESP_OK);
+	}
+
+	lcd_send_line_finish(spi);
+	heap_caps_free(send_img);
+}
 void lcd_draw_part(spi_device_handle_t* spi, uint16_t color, uint8_t start_x, uint8_t start_y, uint8_t w, uint8_t h, uint16_t* image)
 {
 	uint16_t *lines[h/PARALLEL_LINES];
 	int sending_line = -1;
     esp_err_t ret;
     int x;
-    //Transaction descriptors. Declared static so they're not allocated on the stack; we need this memory even when this
-    //function is finished because the SPI driver needs access to it even while we're already calculating the next line.
+
     static spi_transaction_t trans[6];
 
-    //In theory, it's better to initialize trans and data only once and hang on to the initialized
-    //variables. We allocate them on the stack, so we need to re-init them each call.
     for (x = 0; x < 6; x++)
     {
         memset(&trans[x], 0, sizeof(spi_transaction_t));
