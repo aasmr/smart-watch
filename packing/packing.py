@@ -28,17 +28,17 @@ bradis_sin = [
 
 def to_argb8565_esp32(color_tuple):
     color = (int(color_tuple[0]/255*31) << 11)+(int(color_tuple[1]/255*63) << 5)+int(color_tuple[2]/255*31)+(color_tuple[3] << 16)
-    color_a = (color & 0xFF0000) >> 16
-    color_m = (color & 0x00FF00) >> 8
-    color_l = (color & 0x0000FF) >> 0
-    color = color_m + (color_l << 8) + (color_a<<16)
+    #color_a = (color & 0xFF0000) >> 16
+    #color_m = (color & 0x00FF00) >> 8
+    #color_l = (color & 0x0000FF) >> 0
+    #color = color_m + (color_l << 8) + (color_a<<16)
     return color
 
 def to_rgb565_esp32(color_tuple):
     color = (int(color_tuple[0]/255*31) << 11)+(int(color_tuple[1]/255*63) << 5)+int(color_tuple[2]/255*31)
-    color_m = (color & 0xFF00) >> 8
-    color_l = (color & 0x00FF) >> 0
-    color = color_m + (color_l << 8)
+    #color_m = (color & 0xFF00) >> 8
+    #color_l = (color & 0x00FF) >> 0
+    #color = color_m + (color_l << 8)
     return color
 
 if __name__ == '__main__':
@@ -79,7 +79,10 @@ if __name__ == '__main__':
 
     for y in range(_bg.size[1]):
         for x in range(_bg.size[0]):
+            #if to_rgb565_esp32(bg[x, y]) != 0:
+                #print(x, y, to_rgb565_esp32(bg[x, y]))
             bg_arr.append(to_rgb565_esp32(bg[x, y]))
+            
 
     with open('cyfer', 'wb') as f:
         f.write(bg_arr[0].to_bytes(1, byteorder='big'))

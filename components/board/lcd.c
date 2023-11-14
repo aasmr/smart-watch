@@ -189,6 +189,7 @@ void lcd_draw_all(spi_device_handle_t* spi, uint16_t* image)
 		lines[i] = heap_caps_malloc(240 * PARALLEL_LINES * sizeof(uint16_t), MALLOC_CAP_DMA);
 		assert(lines[i] != NULL);
 		parline_fill_image(lines[i], image);
+		image = image + 240 * PARALLEL_LINES;
 	}
 	for (uint16_t y = 0; y < 240; y += PARALLEL_LINES)
 	{

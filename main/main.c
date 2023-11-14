@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include <freertos/task.h>
@@ -11,8 +12,7 @@
 //#include "esp_event.h"
 //#include "esp_event_loop.h"
 //#include "nvs_flash.h"
-#include "nvs_flash.h"
-#include "nvs.h"
+#include <dirent.h>
 #include "driver/gpio.h"
 #include "driver/gptimer.h"
 #include "lcd.h"
@@ -126,10 +126,23 @@ void app_main(void)
 
 	FILE* f;
 	ESP_LOGI(TAG, "Opening file");
-	f = fopen("/spiffs/cyfer", "r+b");
+	f = fopen("/spiffs/cyfer", "rb");
 	if (f == NULL)
 	{
-		ESP_LOGE(TAG, "Failed to open file for writing");
+		ESP_LOGE(TAG, "Failed to open file for reading");
 	    return;
 	}
+
+	uint8_t header[5];
+	fread(header,sizeof(header),1,f);
+	printf("%hhu\n", header[0]);
+	uint16_t *image;
+	image = (uint16_t*) heap_caps_malloc(240*240*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	assert(image != NULL);
+	ESP_LOGI(TAG, "malloc ok");
+
+	fread(image, 2*240*240, 1, f);
+
+	printf("%hu\n", image[240*5+113]);
+	lcd_draw_all(&spi, image);
 }
