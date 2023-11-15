@@ -44,10 +44,10 @@ def to_rgb565_esp32(color_tuple):
 if __name__ == '__main__':
     with open('bradis_tan', 'wb') as f:
         for i in bradis_tan:
-            f.write(i.to_bytes(2, byteorder='big'))
+            f.write(i.to_bytes(2, byteorder='little'))
     with open('bradis_sin', 'wb') as f:
         for i in bradis_sin:
-            f.write(i.to_bytes(2, byteorder='big'))
+            f.write(i.to_bytes(2, byteorder='little'))
 
     bg_name = "cyfer.png"
     strelka_name = "sec_6_96.png"
