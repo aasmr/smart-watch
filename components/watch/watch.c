@@ -150,7 +150,7 @@ static img32_t rotate(uint16_t angle, img32_t image)
         {
         	for(x = 0; x < image.width; x++)
             {
-        		buf_image[image.width * (image.width - 1 - y) + x] = image.img_arr[image.width * y + x];
+        		buf_image[image.width * (image.height - 1 - y) + x] = image.img_arr[image.width * y + x];
             }
         }
         image.xc = image.width - image.xc;
@@ -164,7 +164,7 @@ static img32_t rotate(uint16_t angle, img32_t image)
         {
         	for(x = 0; x < image.width; x++)
         	{
-        		buf_image[image.height * (image.height - 1 - x) + y] = image.img_arr[image.width * y + x];
+        		buf_image[image.height * (image.width - 1 - x) + y] = image.img_arr[image.width * y + x];
         	}
         }
         uint8_t temp_w, temp_xc;
@@ -227,6 +227,8 @@ static img32_t rotate(uint16_t angle, img32_t image)
     h_buf = (int16_t)(get_max(y1, y2, y3, y4)) - y_offset + 1;
 
     uint32_t *temp_buf_image;
+    printf("Req size: %d\n", (w_buf * h_buf * sizeof(uint32_t)));
+    printf("w: %hd h: %hd \n", w_buf, h_buf);
     temp_buf_image = (uint32_t*) heap_caps_malloc(w_buf * h_buf * sizeof(uint32_t), MALLOC_CAP_SPIRAM);
     memset(temp_buf_image, 0, w_buf * h_buf * sizeof(uint32_t));
     float new_x = 0;
