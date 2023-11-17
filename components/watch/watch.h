@@ -53,10 +53,20 @@ typedef struct{
 
 	img16_t		cyfer_img;
 	img32_t		sec_img;
+	img32_t		min_img;
+	img32_t		hrs_img;
 
-	img16_t		prev_bgnd;
-	img16_t		next_bgnd;
-	img16_t		next_part;
+	img16_t		buf_bgnd;
+	img16_t		prev_bgnd_hrs;
+	img16_t		next_bgnd_hrs;
+	img16_t		next_part_hrs;
+	img16_t		prev_bgnd_min;
+	img16_t		next_bgnd_min;
+	img16_t		next_part_min;
+	img32_t		prev_min;
+	img16_t		prev_bgnd_sec;
+	img16_t		next_bgnd_sec;
+	img16_t		next_part_sec;
 
 }watch_t;
 
