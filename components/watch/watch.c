@@ -49,6 +49,10 @@ static float get_max(float n1, float n2, float n3, float n4)
 	return max;
 }
 
+static void write_to_buf()
+{
+
+}
 static void merging_layers(uint16_t* sum_img, uint16_t* img1, uint32_t* img2, uint8_t w, uint8_t h)
 {
 
@@ -227,8 +231,6 @@ static img32_t rotate(uint16_t angle, img32_t image)
     h_buf = (int16_t)(get_max(y1, y2, y3, y4)) - y_offset + 1;
 
     uint32_t *temp_buf_image;
-    printf("Req size: %d\n", (w_buf * h_buf * sizeof(uint32_t)));
-    printf("w: %hd h: %hd \n", w_buf, h_buf);
     temp_buf_image = (uint32_t*) heap_caps_malloc(w_buf * h_buf * sizeof(uint32_t), MALLOC_CAP_SPIRAM);
     memset(temp_buf_image, 0, w_buf * h_buf * sizeof(uint32_t));
     float new_x = 0;
@@ -269,7 +271,217 @@ static img32_t rotate(uint16_t angle, img32_t image)
 	heap_caps_free(buf_image);
 	return rot_img;
 }
-static void rotate_sec(uint8_t sec)
+
+static void rotate_hrs(uint16_t min)
+{
+	img32_t rot_hrs;
+
+	ESP_LOGI(TAG, "step in hrs draw");
+	printf("%hu\n", min/2);
+	rot_hrs = rotate(min/2, watch.hrs_img);
+
+	uint16_t *mrg_img;
+	uint16_t *part_bg_img;
+
+	img16_t mrg;
+	img16_t part_bg;
+
+	part_bg_img = (uint16_t*) heap_caps_malloc(rot_hrs.width * rot_hrs.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	mrg_img = (uint16_t*) heap_caps_malloc(rot_hrs.width * rot_hrs.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+
+	memset(part_bg_img, 0, rot_hrs.width * rot_hrs.height * sizeof(uint16_t));
+	memset(mrg_img, 0, rot_hrs.width * rot_hrs.height * sizeof(uint16_t));
+
+	uint8_t x, y, start_x, start_y;
+	uint32_t i;
+	i = 0;
+	start_x = 120 - rot_hrs.xc;
+	start_y = 120 - rot_hrs.yc;
+
+	for (y = start_y; y < start_y + rot_hrs.height; y++)
+	{
+		for (x = start_x; x < start_x + rot_hrs.width; x++)
+		{
+			part_bg_img[i] = watch.cyfer_img.img_arr[240*y+x];
+			i++;
+		}
+	}
+
+	heap_caps_free(watch.buf_bgnd.img_arr);
+	uint16_t *bufer_cyfer;
+	bufer_cyfer = (uint16_t*) heap_caps_malloc(watch.buf_bgnd.width * watch.buf_bgnd.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	memset(bufer_cyfer, 0, watch.buf_bgnd.width * watch.buf_bgnd.height * sizeof(uint16_t));
+	memcpy(bufer_cyfer, watch.cyfer_img.img_arr, watch.buf_bgnd.width * watch.buf_bgnd.height * sizeof(uint16_t));
+	watch.buf_bgnd.img_arr = bufer_cyfer;
+
+	part_bg.width = rot_hrs.width;
+	part_bg.height = rot_hrs.height;
+	part_bg.type = PART_BCKGND;
+	part_bg.xc = rot_hrs.xc;
+	part_bg.yc = rot_hrs.yc;
+	part_bg.img_arr = part_bg_img;
+
+	watch.prev_bgnd_hrs = watch.next_bgnd_hrs;
+	uint16_t *prev_bg_img;
+	prev_bg_img = (uint16_t*) heap_caps_malloc(watch.prev_bgnd_hrs.width * watch.prev_bgnd_hrs.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	memset(prev_bg_img, 0, watch.prev_bgnd_hrs.width * watch.prev_bgnd_hrs.height * sizeof(uint16_t));
+	memcpy(prev_bg_img, watch.next_bgnd_hrs.img_arr, watch.prev_bgnd_hrs.width * watch.prev_bgnd_hrs.height * sizeof(uint16_t));
+	watch.prev_bgnd_hrs.img_arr = prev_bg_img;
+
+	heap_caps_free(watch.next_bgnd_hrs.img_arr);
+	watch.next_bgnd_hrs = part_bg;
+
+	merging_layers(mrg_img, part_bg_img, rot_hrs.img_arr, rot_hrs.width, rot_hrs.height);
+
+	for (y = 0; y < rot_hrs.height; y++)
+	{
+		for (x = 0; x < rot_hrs.width; x++)
+		{
+			watch.buf_bgnd.img_arr[watch.buf_bgnd.width * (start_y + y) + (start_x + x)] = mrg_img[rot_hrs.width*y+x];
+		}
+	}
+
+	mrg.width = rot_hrs.width;
+	mrg.height = rot_hrs.height;
+	mrg.type = PART_BCKGND;
+	mrg.xc = rot_hrs.xc;
+	mrg.yc = rot_hrs.yc;
+	mrg.img_arr = mrg_img;
+
+	uint16_t *buf_part_bg_img, *buf_mrg_img;
+
+	buf_part_bg_img = (uint16_t*) heap_caps_malloc(part_bg.width * part_bg.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	memset(buf_part_bg_img, 0, part_bg.width * part_bg.height * sizeof(uint16_t));
+	memcpy(buf_part_bg_img, part_bg.img_arr, part_bg.width * part_bg.height * sizeof(uint16_t));
+
+	buf_mrg_img = (uint16_t*) heap_caps_malloc(mrg.width * mrg.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	memset(buf_mrg_img, 0, mrg.width * mrg.height * sizeof(uint16_t));
+	memcpy(buf_mrg_img, mrg.img_arr, mrg.width * mrg.height * sizeof(uint16_t));
+
+	watch.next_part_hrs = mrg;
+	watch.next_part_hrs.img_arr = buf_mrg_img;
+
+	watch.next_bgnd_hrs.img_arr = buf_part_bg_img;
+
+	heap_caps_free(part_bg.img_arr);
+	heap_caps_free(mrg.img_arr);
+	heap_caps_free(rot_hrs.img_arr);
+
+}
+
+static void rotate_min(uint16_t sec)
+{
+	img32_t rot_min;
+
+	rot_min = rotate(sec/10, watch.min_img);
+
+	uint16_t *mrg_img;
+	uint16_t *part_bg_img;
+
+	img16_t mrg;
+	img16_t part_bg;
+
+	part_bg_img = (uint16_t*) heap_caps_malloc(rot_min.width * rot_min.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	mrg_img = (uint16_t*) heap_caps_malloc(rot_min.width * rot_min.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+
+	memset(part_bg_img, 0, rot_min.width * rot_min.height * sizeof(uint16_t));
+	memset(mrg_img, 0, rot_min.width * rot_min.height * sizeof(uint16_t));
+
+	uint8_t x, y, start_x, start_y, _start_x, _start_y;
+	uint32_t i;
+
+
+	_start_x = 120 - watch.next_bgnd_min.xc;
+	_start_y = 120 - watch.next_bgnd_min.yc;
+	for (y = 0; y < watch.next_bgnd_min.height; y++)
+	{
+		for (x = 0; x < watch.next_bgnd_min.width; x++)
+		{
+			watch.buf_bgnd.img_arr[watch.buf_bgnd.width * (_start_y + y) + (_start_x + x)] = watch.next_bgnd_min.img_arr[watch.next_bgnd_min.width*y+x];
+		}
+	}
+
+	_start_x = 120 - watch.next_part_hrs.xc;
+	_start_y = 120 - watch.next_part_hrs.yc;
+	for (y = 0; y < watch.next_part_hrs.height; y++)
+	{
+		for (x = 0; x < watch.next_part_hrs.width; x++)
+		{
+			watch.buf_bgnd.img_arr[watch.buf_bgnd.width * (_start_y + y) + (_start_x + x)] = watch.next_part_hrs.img_arr[watch.next_part_hrs.width*y+x];
+		}
+	}
+
+
+	i = 0;
+	start_x = 120 - rot_min.xc;
+	start_y = 120 - rot_min.yc;
+
+	for (y = start_y; y < start_y + rot_min.height; y++)
+	{
+		for (x = start_x; x < start_x + rot_min.width; x++)
+		{
+			part_bg_img[i] = watch.buf_bgnd.img_arr[240*y+x];
+			i++;
+		}
+	}
+
+	part_bg.width = rot_min.width;
+	part_bg.height = rot_min.height;
+	part_bg.type = PART_BCKGND;
+	part_bg.xc = rot_min.xc;
+	part_bg.yc = rot_min.yc;
+	part_bg.img_arr = part_bg_img;
+
+	watch.prev_bgnd_min = watch.next_bgnd_min;
+
+	uint16_t *prev_bg_img;
+	prev_bg_img = (uint16_t*) heap_caps_malloc(watch.prev_bgnd_min.width * watch.prev_bgnd_min.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	memset(prev_bg_img, 0, watch.prev_bgnd_min.width * watch.prev_bgnd_min.height * sizeof(uint16_t));
+	memcpy(prev_bg_img, watch.next_bgnd_min.img_arr, watch.next_bgnd_min.width * watch.next_bgnd_min.height * sizeof(uint16_t));
+	watch.prev_bgnd_min.img_arr = prev_bg_img;
+
+	heap_caps_free(watch.next_bgnd_min.img_arr);
+	watch.next_bgnd_min = part_bg;
+
+	merging_layers(mrg_img, part_bg_img, rot_min.img_arr, rot_min.width, rot_min.height);
+
+	mrg.width = rot_min.width;
+	mrg.height = rot_min.height;
+	mrg.type = PART_BCKGND;
+	mrg.xc = rot_min.xc;
+	mrg.yc = rot_min.yc;
+	mrg.img_arr = mrg_img;
+
+	for (y = 0; y < rot_min.height; y++)
+	{
+		for (x = 0; x < rot_min.width; x++)
+		{
+			watch.buf_bgnd.img_arr[watch.buf_bgnd.width * (start_y + y) + (start_x + x)] = mrg_img[rot_min.width*y+x];
+		}
+	}
+
+	uint16_t *buf_part_bg_img, *buf_mrg_img;
+
+	buf_part_bg_img = (uint16_t*) heap_caps_malloc(part_bg.width * part_bg.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	memset(buf_part_bg_img, 0, part_bg.width * part_bg.height * sizeof(uint16_t));
+	memcpy(buf_part_bg_img, part_bg.img_arr, part_bg.width * part_bg.height * sizeof(uint16_t));
+
+	buf_mrg_img = (uint16_t*) heap_caps_malloc(mrg.width * mrg.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	memset(buf_mrg_img, 0, mrg.width * mrg.height * sizeof(uint16_t));
+	memcpy(buf_mrg_img, mrg.img_arr, mrg.width * mrg.height * sizeof(uint16_t));
+
+	watch.next_part_min = mrg;
+	watch.next_part_min.img_arr = buf_mrg_img;
+
+	watch.next_bgnd_min.img_arr = buf_part_bg_img;
+
+	heap_caps_free(part_bg.img_arr);
+	heap_caps_free(mrg.img_arr);
+	heap_caps_free(rot_min.img_arr);
+
+}
+
+static void rotate_sec(uint16_t sec)
 {
 	img32_t rot_sec;
 
@@ -287,7 +499,7 @@ static void rotate_sec(uint8_t sec)
 	memset(part_bg_img, 0, rot_sec.width * rot_sec.height * sizeof(uint16_t));
 	memset(mrg_img, 0, rot_sec.width * rot_sec.height * sizeof(uint16_t));
 
-	uint8_t x, y, start_x, start_y;
+	uint8_t x, y, start_x, start_y, _start_x, _start_y;
 	uint32_t i;
 	i = 0;
 	start_x = 120 - rot_sec.xc;
@@ -297,7 +509,7 @@ static void rotate_sec(uint8_t sec)
 	{
 		for (x = start_x; x < start_x + rot_sec.width; x++)
 		{
-			part_bg_img[i] = watch.cyfer_img.img_arr[240*y+x];
+			part_bg_img[i] = watch.buf_bgnd.img_arr[240*y+x];
 			i++;
 		}
 	}
@@ -309,15 +521,27 @@ static void rotate_sec(uint8_t sec)
 	part_bg.yc = rot_sec.yc;
 	part_bg.img_arr = part_bg_img;
 
-	watch.prev_bgnd = watch.next_bgnd;
-	uint16_t *prev_bg_img;
-	//heap_caps_free(watch.prev_bgnd.img_arr);
-	prev_bg_img = (uint16_t*) heap_caps_malloc(watch.prev_bgnd.width * watch.prev_bgnd.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
-	memset(prev_bg_img, 0, watch.prev_bgnd.width * watch.prev_bgnd.height * sizeof(uint16_t));
-	memcpy(prev_bg_img, watch.next_bgnd.img_arr, watch.prev_bgnd.width * watch.prev_bgnd.height * sizeof(uint16_t));
-	watch.prev_bgnd.img_arr = prev_bg_img;
+	watch.prev_bgnd_sec = watch.next_bgnd_sec;
+	/*
+	_start_x = 120 - watch.prev_bgnd_sec.xc;
+	_start_y = 120 - watch.prev_bgnd_sec.yc;
+	for (y = 0; y < watch.prev_bgnd_sec.height; y++)
+	{
+		for (x = 0; x < watch.prev_bgnd_sec.width; x++)
+		{
+			watch.buf_bgnd.img_arr[watch.buf_bgnd.width * (_start_y + y) + (_start_x + x)] = watch.prev_bgnd_sec.img_arr[watch.prev_bgnd_min.width*y+x];
+		}
+	}
+	*/
 
-	watch.next_bgnd = part_bg;
+	uint16_t *prev_bg_img;
+	prev_bg_img = (uint16_t*) heap_caps_malloc(watch.prev_bgnd_sec.width * watch.prev_bgnd_sec.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	memset(prev_bg_img, 0, watch.prev_bgnd_sec.width * watch.prev_bgnd_sec.height * sizeof(uint16_t));
+	memcpy(prev_bg_img, watch.next_bgnd_sec.img_arr, watch.prev_bgnd_sec.width * watch.prev_bgnd_sec.height * sizeof(uint16_t));
+	watch.prev_bgnd_sec.img_arr = prev_bg_img;
+
+	heap_caps_free(watch.next_bgnd_sec.img_arr);
+	watch.next_bgnd_sec = part_bg;
 
 	merging_layers(mrg_img, part_bg_img, rot_sec.img_arr, rot_sec.width, rot_sec.height);
 
@@ -328,8 +552,23 @@ static void rotate_sec(uint8_t sec)
 	mrg.yc = rot_sec.yc;
 	mrg.img_arr = mrg_img;
 
-	watch.next_part = mrg;
+	uint16_t *buf_part_bg_img, *buf_mrg_img;
 
+	buf_part_bg_img = (uint16_t*) heap_caps_malloc(part_bg.width * part_bg.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	memset(buf_part_bg_img, 0, part_bg.width * part_bg.height * sizeof(uint16_t));
+	memcpy(buf_part_bg_img, part_bg.img_arr, part_bg.width * part_bg.height * sizeof(uint16_t));
+
+	buf_mrg_img = (uint16_t*) heap_caps_malloc(mrg.width * mrg.height * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	memset(buf_mrg_img, 0, mrg.width * mrg.height * sizeof(uint16_t));
+	memcpy(buf_mrg_img, mrg.img_arr, mrg.width * mrg.height * sizeof(uint16_t));
+
+	watch.next_part_sec = mrg;
+	watch.next_part_sec.img_arr = buf_mrg_img;
+
+	watch.next_bgnd_sec.img_arr = buf_part_bg_img;
+
+	heap_caps_free(part_bg.img_arr);
+	heap_caps_free(mrg.img_arr);
 	heap_caps_free(rot_sec.img_arr);
 
 }
@@ -338,16 +577,55 @@ void watch_app_worker(spi_device_handle_t* spi)
 {
 	uint8_t start_x = 0;
 	uint8_t start_y = 0;
+	uint16_t sum_sec;
+	sum_sec = watch.hrs*60*60 + watch.min * 60 + watch.sec;
+	if(sum_sec % 120 == 0)
+	{
+		start_x = 120 - watch.prev_bgnd_hrs.xc;
+		start_y = 120 - watch.prev_bgnd_hrs.yc;
+		if(watch.prev_bgnd_hrs.width * watch.prev_bgnd_hrs.height <= 14400)
+			lcd_draw_part_wo_lines(spi, start_x, start_y, watch.prev_bgnd_hrs.width, watch.prev_bgnd_hrs.height, watch.prev_bgnd_hrs.img_arr);
+		else
+			ESP_LOGI(TAG, "hrs need send with lines");
 
-	start_x = 120 - watch.prev_bgnd.xc;
-	start_y = 120 - watch.prev_bgnd.yc;
-	if(watch.prev_bgnd.width * watch.prev_bgnd.height <= 14400)
-		lcd_draw_part_wo_lines(spi, start_x, start_y, watch.prev_bgnd.width, watch.prev_bgnd.height, watch.prev_bgnd.img_arr);
+		start_x = 120 - watch.next_part_hrs.xc;
+		start_y = 120 - watch.next_part_hrs.yc;
+		if(watch.next_part_hrs.width * watch.next_part_hrs.height <= 14400)
+			lcd_draw_part_wo_lines(spi, start_x, start_y, watch.next_part_hrs.width, watch.next_part_hrs.height, watch.next_part_hrs.img_arr);
+		else
+			ESP_LOGI(TAG, "hrs need send with lines");
+	}
 
-	start_x = 120 - watch.next_part.xc;
-	start_y = 120 - watch.next_part.yc;
-	if(watch.next_part.width * watch.next_part.height <= 14400)
-		lcd_draw_part_wo_lines(spi, start_x, start_y, watch.next_part.width, watch.next_part.height, watch.next_part.img_arr);
+	if(sum_sec % 10 == 0)
+	{
+		start_x = 120 - watch.prev_bgnd_min.xc;
+		start_y = 120 - watch.prev_bgnd_min.yc;
+		if(watch.prev_bgnd_min.width * watch.prev_bgnd_min.height <= 14400)
+			lcd_draw_part_wo_lines(spi, start_x, start_y, watch.prev_bgnd_min.width, watch.prev_bgnd_min.height, watch.prev_bgnd_min.img_arr);
+		else
+			ESP_LOGI(TAG, "min need send with lines");
+
+		start_x = 120 - watch.next_part_min.xc;
+		start_y = 120 - watch.next_part_min.yc;
+		if(watch.next_part_min.width * watch.next_part_min.height <= 14400)
+			lcd_draw_part_wo_lines(spi, start_x, start_y, watch.next_part_min.width, watch.next_part_min.height, watch.next_part_min.img_arr);
+		else
+			ESP_LOGI(TAG, "min need send with lines");
+	}
+
+	start_x = 120 - watch.prev_bgnd_sec.xc;
+	start_y = 120 - watch.prev_bgnd_sec.yc;
+	if(watch.prev_bgnd_sec.width * watch.prev_bgnd_sec.height <= 14400)
+		lcd_draw_part_wo_lines(spi, start_x, start_y, watch.prev_bgnd_sec.width, watch.prev_bgnd_sec.height, watch.prev_bgnd_sec.img_arr);
+	else
+		ESP_LOGI(TAG, "sec need send with lines");
+
+	start_x = 120 - watch.next_part_sec.xc;
+	start_y = 120 - watch.next_part_sec.yc;
+	if(watch.next_part_sec.width * watch.next_part_sec.height <= 14400)
+		lcd_draw_part_wo_lines(spi, start_x, start_y, watch.next_part_sec.width, watch.next_part_sec.height, watch.next_part_sec.img_arr);
+	else
+		ESP_LOGI(TAG, "sec need send with lines");
 
 	watch.sec = watch.sec + 1;
 	if(watch.sec >= 60)
@@ -365,9 +643,26 @@ void watch_app_worker(spi_device_handle_t* spi)
 		}
 	}
 
-	heap_caps_free(watch.prev_bgnd.img_arr);
-	heap_caps_free(watch.next_part.img_arr);
+	sum_sec = watch.hrs*60*60 + watch.min * 60 + watch.sec;
+
+	if(sum_sec % 120 == 0)
+	{
+		heap_caps_free(watch.prev_bgnd_hrs.img_arr);
+		heap_caps_free(watch.next_part_hrs.img_arr);
+		rotate_hrs(watch.min + watch.hrs * 60);
+	}
+
+	if(sum_sec % 10 == 0)
+	{
+		heap_caps_free(watch.prev_bgnd_min.img_arr);
+		heap_caps_free(watch.next_part_min.img_arr);
+		rotate_min(watch.sec + watch.min * 60);
+	}
+
+	heap_caps_free(watch.prev_bgnd_sec.img_arr);
+	heap_caps_free(watch.next_part_sec.img_arr);
 	rotate_sec(watch.sec);
+
 	multi_heap_info_t info;
 	heap_caps_get_info(&info, MALLOC_CAP_SPIRAM | MALLOC_CAP_32BIT);
 	printf("MF: %d, TFB: %d LFB: %d\n", info.minimum_free_bytes, info.total_free_bytes, info.largest_free_block);
@@ -417,13 +712,14 @@ void watch_app_init(spi_device_handle_t* spi)
 	uint8_t cyfer_header[5];
 	fread(cyfer_header, sizeof(cyfer_header), 1, f);
 
-	uint16_t *cyfer_img;
+	uint16_t *cyfer_img, *buffer_cyfer_img;
 	cyfer_img = (uint16_t*) heap_caps_malloc(240*240*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	buffer_cyfer_img = (uint16_t*) heap_caps_malloc(240*240*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
 	assert(cyfer_img != NULL);
 	fread(cyfer_img, 2*240*240, 1, f);
 	fclose(f);
 
-	img16_t cyfer;
+	img16_t cyfer, buf_cyfer;
 
 	cyfer.width 	= cyfer_header[0];
 	cyfer.height 	= cyfer_header[1];
@@ -432,7 +728,15 @@ void watch_app_init(spi_device_handle_t* spi)
 	cyfer.yc 		= cyfer_header[4];
 	cyfer.img_arr   = cyfer_img;
 
+	buf_cyfer.width 	= cyfer_header[0];
+	buf_cyfer.height 	= cyfer_header[1];
+	buf_cyfer.type 		= (img_type_t)cyfer_header[2];
+	buf_cyfer.xc 		= cyfer_header[3];
+	buf_cyfer.yc 		= cyfer_header[4];
+	buf_cyfer.img_arr   = buffer_cyfer_img;
+
 	watch.cyfer_img = cyfer;
+	watch.buf_bgnd = buf_cyfer;
 
 	ESP_LOGI(TAG, "Opening file: sec");
 	f = fopen("/spiffs/sec", "rb");
@@ -460,9 +764,90 @@ void watch_app_init(spi_device_handle_t* spi)
 	sec.img_arr   = sec_img;
 
 	watch.sec_img = sec;
-	watch.next_bgnd = cyfer;
+
+	ESP_LOGI(TAG, "Opening file: min");
+	f = fopen("/spiffs/min", "rb");
+	if (f == NULL)
+	{
+		ESP_LOGE(TAG, "Failed to open min file for reading");
+		return;
+	}
+
+	uint8_t min_header[5];
+	fread(min_header, sizeof(min_header), 1, f);
+	uint32_t *min_img;
+	min_img = (uint32_t*) heap_caps_malloc(min_header[0]*min_header[1]*sizeof(uint32_t), MALLOC_CAP_SPIRAM);
+	assert(min_img != NULL);
+	fread(min_img, 4*min_header[0]*min_header[1], 1, f);
+	fclose(f);
+
+	img32_t min;
+
+	min.width 	= min_header[0];
+	min.height 	= min_header[1];
+	min.type 	= (img_type_t)min_header[2];
+	min.xc 		= min_header[3];
+	min.yc 		= min_header[4];
+	min.img_arr   = min_img;
+
+	watch.min_img = min;
+
+	ESP_LOGI(TAG, "Opening file: hrs");
+	f = fopen("/spiffs/hrs", "rb");
+	if (f == NULL)
+	{
+		ESP_LOGE(TAG, "Failed to open hrs file for reading");
+		return;
+	}
+
+	uint8_t hrs_header[5];
+	fread(hrs_header, sizeof(hrs_header), 1, f);
+	uint32_t *hrs_img;
+	hrs_img = (uint32_t*) heap_caps_malloc(hrs_header[0]*hrs_header[1]*sizeof(uint32_t), MALLOC_CAP_SPIRAM);
+	assert(hrs_img != NULL);
+	fread(hrs_img, 4*hrs_header[0]*hrs_header[1], 1, f);
+	fclose(f);
+
+	img32_t hrs;
+
+	hrs.width 	= hrs_header[0];
+	hrs.height 	= hrs_header[1];
+	hrs.type 	= (img_type_t)hrs_header[2];
+	hrs.xc 		= hrs_header[3];
+	hrs.yc 		= hrs_header[4];
+	hrs.img_arr   = hrs_img;
+
+	watch.hrs_img = hrs;
+
+	uint16_t *cyfer_hrs, *cyfer_min, *cyfer_sec;
+	cyfer_hrs = (uint16_t*) heap_caps_malloc(240*240*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	cyfer_min = (uint16_t*) heap_caps_malloc(240*240*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	cyfer_sec = (uint16_t*) heap_caps_malloc(240*240*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+
+	memcpy(cyfer_hrs, cyfer.img_arr, 240*240*sizeof(uint16_t));
+	memcpy(cyfer_min, cyfer.img_arr, 240*240*sizeof(uint16_t));
+	memcpy(cyfer_sec, cyfer.img_arr, 240*240*sizeof(uint16_t));
+
+	watch.next_bgnd_sec = cyfer;
+	watch.next_bgnd_min = cyfer;
+	watch.next_bgnd_hrs = cyfer;
+
+	watch.next_bgnd_sec.img_arr = cyfer_sec;
+	watch.next_bgnd_min.img_arr = cyfer_min;
+	watch.next_bgnd_hrs.img_arr = cyfer_hrs;
+
+	watch.next_bgnd_sec.width = 0;
+	watch.next_bgnd_min.width = 0;
+
+	watch.next_bgnd_sec.height = 0;
+	watch.next_bgnd_min.height = 0;
+
+	watch.prev_min = watch.min_img;
 
 	lcd_draw_all(spi, watch.cyfer_img.img_arr);
+	rotate_hrs(watch.hrs*60 + watch.min);
+	rotate_min(watch.min*60 + watch.sec);
 	rotate_sec(watch.sec);
+
 	watch_app_worker(spi);
 }

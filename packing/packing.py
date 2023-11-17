@@ -51,11 +51,19 @@ if __name__ == '__main__':
 
     bg_name = "cyfer.png"
     strelka_name = "sec_6_96.png"
+    hrs_name = "hrs_6_69.png"
+    min_name = "min_6_85.png" 
     _bg = Image.open(bg_name)
     bg = _bg.load()
 
     _strelka = Image.open(strelka_name)
     strelka = _strelka.load()
+
+    _min = Image.open(min_name)
+    min_img = _min.load()
+
+    _hrs = Image.open(hrs_name)
+    hrs = _hrs.load()
     
     strelka_arr = []
     strelka_arr.append(12)
@@ -69,7 +77,32 @@ if __name__ == '__main__':
                 strelka_arr.append(to_argb8565_esp32([0, 0, 0, 0]))
             else:
                 strelka_arr.append(to_argb8565_esp32(strelka[x, y]))
-    
+
+    min_arr = []
+    min_arr.append(12)
+    min_arr.append(91)
+    min_arr.append(2)
+    min_arr.append(6)
+    min_arr.append(85)
+    for y in range(_min.size[1]):
+        for x in range(_min.size[0]):
+            if min_img[x, y][3] == 0:
+                min_arr.append(to_argb8565_esp32([0, 0, 0, 0]))
+            else:
+                min_arr.append(to_argb8565_esp32(min_img[x, y]))
+
+    hrs_arr = []             
+    hrs_arr.append(12)
+    hrs_arr.append(75)
+    hrs_arr.append(3)
+    hrs_arr.append(6)
+    hrs_arr.append(69)
+    for y in range(_hrs.size[1]):
+        for x in range(_hrs.size[0]):
+            if hrs[x, y][3] == 0:
+                hrs_arr.append(to_argb8565_esp32([0, 0, 0, 0]))
+            else:
+                hrs_arr.append(to_argb8565_esp32(hrs[x, y]))
 
     bg_arr = []
     bg_arr.append(240)
@@ -102,4 +135,21 @@ if __name__ == '__main__':
         f.write(strelka_arr[4].to_bytes(1, byteorder='big'))
         for i in strelka_arr[5:]:
                 f.write(i.to_bytes(4, byteorder='big'))
-        print(strelka_arr[21])
+
+    with open('min', 'wb') as f:
+        f.write(min_arr[0].to_bytes(1, byteorder='big'))
+        f.write(min_arr[1].to_bytes(1, byteorder='big'))
+        f.write(min_arr[2].to_bytes(1, byteorder='big'))
+        f.write(min_arr[3].to_bytes(1, byteorder='big'))
+        f.write(min_arr[4].to_bytes(1, byteorder='big'))
+        for i in min_arr[5:]:
+                f.write(i.to_bytes(4, byteorder='big'))
+
+    with open('hrs', 'wb') as f:
+        f.write(hrs_arr[0].to_bytes(1, byteorder='big'))
+        f.write(hrs_arr[1].to_bytes(1, byteorder='big'))
+        f.write(hrs_arr[2].to_bytes(1, byteorder='big'))
+        f.write(hrs_arr[3].to_bytes(1, byteorder='big'))
+        f.write(hrs_arr[4].to_bytes(1, byteorder='big'))
+        for i in hrs_arr[5:]:
+                f.write(i.to_bytes(4, byteorder='big'))

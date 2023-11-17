@@ -72,9 +72,9 @@ static void parline_fill_color(uint16_t* lines, uint16_t color)
     }
 }
 
-static void parline_fill_image(uint16_t* lines, uint16_t* image)
+static void parline_fill_image(uint16_t* lines, uint16_t* image, uint8_t w, uint8_t h)
 {
-    for (int x = 0; x < 240*PARALLEL_LINES; x++)
+    for (int x = 0; x < w*h; x++)
     {
     	*lines = *image;
     	lines++;
@@ -188,7 +188,7 @@ void lcd_draw_all(spi_device_handle_t* spi, uint16_t* image)
 	{
 		lines[i] = heap_caps_malloc(240 * PARALLEL_LINES * sizeof(uint16_t), MALLOC_CAP_DMA);
 		assert(lines[i] != NULL);
-		parline_fill_image(lines[i], image);
+		parline_fill_image(lines[i], image, 240, PARALLEL_LINES);
 		image = image + 240 * PARALLEL_LINES;
 	}
 	for (uint16_t y = 0; y < 240; y += PARALLEL_LINES)
@@ -224,6 +224,9 @@ void lcd_draw_all(spi_device_handle_t* spi, uint16_t* image)
 }
 void lcd_draw_part_wo_lines(spi_device_handle_t* spi, uint8_t start_x, uint8_t start_y, uint8_t w, uint8_t h, uint16_t* image)
 {
+	if( w == 0 || h == 0)
+		return;
+
 	uint16_t *send_img;
 	esp_err_t ret;
 	int x;
@@ -257,11 +260,11 @@ void lcd_draw_part_wo_lines(spi_device_handle_t* spi, uint8_t start_x, uint8_t s
 	trans[3].tx_data[2] = 0;    			//End page high
 	trans[3].tx_data[3] = start_y + h - 1;   //End page low
 	trans[4].tx_data[0] = 0x2C;         	//memory write
-	trans[5].length = w  *h * 2 * 8;  		//Data length, in bits
+	trans[5].length = w * h * 2 * 8;  		//Data length, in bits
 
-	send_img = heap_caps_malloc(240 * PARALLEL_LINES * sizeof(uint16_t), MALLOC_CAP_DMA);
+	send_img = heap_caps_malloc(w * h * sizeof(uint16_t), MALLOC_CAP_DMA);
 	assert(send_img != NULL);
-	parline_fill_image(send_img, image);
+	parline_fill_image(send_img, image, w, h);
 
 
 	trans[5].tx_buffer = send_img;
@@ -315,7 +318,7 @@ void lcd_draw_part(spi_device_handle_t* spi, uint16_t color, uint8_t start_x, ui
 	{
 		lines[i] = heap_caps_malloc(240 * PARALLEL_LINES * sizeof(uint16_t), MALLOC_CAP_DMA);
 		assert(lines[i] != NULL);
-		parline_fill_image(lines[i], image);
+		parline_fill_image(lines[i], image, 240, PARALLEL_LINES);
 	}
     for (uint16_t y = 0; y < 240; y += PARALLEL_LINES)
     {
