@@ -49,10 +49,6 @@ static float get_max(float n1, float n2, float n3, float n4)
 	return max;
 }
 
-static void write_to_buf()
-{
-
-}
 static void merging_layers(uint16_t* sum_img, uint16_t* img1, uint32_t* img2, uint8_t w, uint8_t h)
 {
 
@@ -499,7 +495,7 @@ static void rotate_sec(uint16_t sec)
 	memset(part_bg_img, 0, rot_sec.width * rot_sec.height * sizeof(uint16_t));
 	memset(mrg_img, 0, rot_sec.width * rot_sec.height * sizeof(uint16_t));
 
-	uint8_t x, y, start_x, start_y, _start_x, _start_y;
+	uint8_t x, y, start_x, start_y;
 	uint32_t i;
 	i = 0;
 	start_x = 120 - rot_sec.xc;
@@ -572,7 +568,95 @@ static void rotate_sec(uint16_t sec)
 	heap_caps_free(rot_sec.img_arr);
 
 }
+void watch_sync(uint8_t h, uint8_t m, uint8_t s)
+{
+	tim_stop(watch.tim);
+	watch.hrs = h;
+	watch.min = m;
+	watch.sec = s - 1;
 
+	printf("Time received (h:m:s): %hhu:%hhu:%hhu\n", h, m, s);
+
+	uint16_t *cyfer_hrs, *cyfer_min, *cyfer_sec, *buf_bgnd;
+	uint8_t start_x = 0;
+	uint8_t start_y = 0;
+
+	start_x = 120 - watch.prev_bgnd_hrs.xc;
+	start_y = 120 - watch.prev_bgnd_hrs.yc;
+	printf("w: %hhu, h: %hhu\n",  watch.prev_bgnd_hrs.width, watch.prev_bgnd_hrs.height);
+	if(watch.prev_bgnd_hrs.width * watch.prev_bgnd_hrs.height < 14400)
+	{
+		lcd_draw_part_wo_lines(watch.spi, start_x, start_y, watch.prev_bgnd_hrs.width, watch.prev_bgnd_hrs.height, watch.prev_bgnd_hrs.img_arr);
+	}
+	else if(watch.prev_bgnd_hrs.width * watch.prev_bgnd_hrs.height == 14400)
+	{
+		lcd_draw_all(watch.spi, watch.prev_bgnd_hrs.img_arr);
+	}
+
+	start_x = 120 - watch.prev_bgnd_min.xc;
+	start_y = 120 - watch.prev_bgnd_min.yc;
+	if(watch.prev_bgnd_hrs.width * watch.prev_bgnd_hrs.height < 14400)
+	{
+		lcd_draw_part_wo_lines(watch.spi, start_x, start_y, watch.prev_bgnd_hrs.width, watch.prev_bgnd_hrs.height, watch.prev_bgnd_hrs.img_arr);
+	}
+	else if(watch.prev_bgnd_hrs.width * watch.prev_bgnd_hrs.height == 14400)
+	{
+		lcd_draw_all(watch.spi, watch.prev_bgnd_hrs.img_arr);
+	}
+
+	start_x = 120 - watch.prev_bgnd_sec.xc;
+	start_y = 120 - watch.prev_bgnd_sec.yc;
+	if(watch.prev_bgnd_hrs.width * watch.prev_bgnd_hrs.height < 14400)
+	{
+		lcd_draw_part_wo_lines(watch.spi, start_x, start_y, watch.prev_bgnd_hrs.width, watch.prev_bgnd_hrs.height, watch.prev_bgnd_hrs.img_arr);
+	}
+	else if(watch.prev_bgnd_hrs.width * watch.prev_bgnd_hrs.height == 14400)
+	{
+		lcd_draw_all(watch.spi, watch.prev_bgnd_hrs.img_arr);
+	}
+
+	heap_caps_free(watch.next_bgnd_sec.img_arr);
+	heap_caps_free(watch.next_bgnd_min.img_arr);
+	heap_caps_free(watch.next_bgnd_hrs.img_arr);
+	heap_caps_free(watch.buf_bgnd.img_arr);
+
+	cyfer_hrs = (uint16_t*) heap_caps_malloc(240*240*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	cyfer_min = (uint16_t*) heap_caps_malloc(240*240*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	cyfer_sec = (uint16_t*) heap_caps_malloc(240*240*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+	buf_bgnd = (uint16_t*) heap_caps_malloc(240*240*sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+
+	memcpy(cyfer_hrs, watch.cyfer_img.img_arr, 240*240*sizeof(uint16_t));
+	memcpy(cyfer_min, watch.cyfer_img.img_arr, 240*240*sizeof(uint16_t));
+	memcpy(cyfer_sec, watch.cyfer_img.img_arr, 240*240*sizeof(uint16_t));
+
+	watch.buf_bgnd = watch.cyfer_img;
+	memcpy(buf_bgnd, watch.buf_bgnd.img_arr, 240*240*sizeof(uint16_t));
+	watch.next_bgnd_hrs.img_arr = buf_bgnd;
+
+	watch.next_bgnd_sec = watch.cyfer_img;
+	watch.next_bgnd_min = watch.cyfer_img;
+	watch.next_bgnd_hrs = watch.cyfer_img;
+
+	watch.next_bgnd_sec.img_arr = cyfer_sec;
+	watch.next_bgnd_min.img_arr = cyfer_min;
+	watch.next_bgnd_hrs.img_arr = cyfer_hrs;
+
+	watch.next_bgnd_sec.width = 0;
+	watch.next_bgnd_min.width = 0;
+
+	watch.next_bgnd_sec.height = 0;
+	watch.next_bgnd_min.height = 0;
+
+	watch.prev_min = watch.min_img;
+
+	lcd_draw_all(watch.spi, watch.cyfer_img.img_arr);
+	rotate_hrs(watch.hrs*60 + watch.min);
+	rotate_min(watch.min*60 + watch.sec);
+	rotate_sec(watch.sec);
+
+	watch_app_worker(watch.spi);
+	tim_start(watch.tim);
+}
 void watch_app_worker(spi_device_handle_t* spi)
 {
 	uint8_t start_x = 0;
@@ -668,8 +752,11 @@ void watch_app_worker(spi_device_handle_t* spi)
 	printf("MF: %d, TFB: %d LFB: %d\n", info.minimum_free_bytes, info.total_free_bytes, info.largest_free_block);
 }
 
-void watch_app_init(spi_device_handle_t* spi)
+void watch_app_init(spi_device_handle_t* spi, gptimer_handle_t* tim)
 {
+	watch.spi = spi;
+	watch.tim = tim;
+
 	watch.sec = 0;
 	watch.min = 0;
 	watch.hrs = 0;
@@ -850,4 +937,5 @@ void watch_app_init(spi_device_handle_t* spi)
 	rotate_sec(watch.sec);
 
 	watch_app_worker(spi);
+	tim_start(watch.tim);
 }

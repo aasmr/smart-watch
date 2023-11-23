@@ -19,6 +19,7 @@
 #include "spi.h"
 #include "lcd.h"
 #include "esp_log.h"
+#include "tim.h"
 
 typedef enum{
 	BCKGNG 		= 0,
@@ -68,9 +69,13 @@ typedef struct{
 	img16_t		next_bgnd_sec;
 	img16_t		next_part_sec;
 
+	spi_device_handle_t *spi;
+	gptimer_handle_t	*tim;
+
 }watch_t;
 
-void watch_app_init(spi_device_handle_t* spi);
+void watch_sync(uint8_t h, uint8_t m, uint8_t s);
 void watch_app_worker(spi_device_handle_t* spi);
+void watch_app_init(spi_device_handle_t* spi, gptimer_handle_t* tim);
 
 #endif /* COMPONENTS_WATCH_WATCH_H_ */

@@ -13,6 +13,7 @@
 #include "lcd.h"
 #include "spiffs.h"
 #include "watch.h"
+#include "ble.h"
 
 
 
@@ -28,13 +29,14 @@ void app_main(void)
 
 	spi_config(&spi);
 	tim_init(&tim, &queue);
+	ble_init();
 
 	//Init board
 	lcd_init(&spi);
 	spiffs_init();
 
 	//Init app
-	watch_app_init(&spi);
+	watch_app_init(&spi, &tim);
 
 	//Start pherepherias, board and app
 	tim_start(&tim);
