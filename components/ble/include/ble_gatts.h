@@ -38,4 +38,5 @@ void ble_gatts_register(void);
 void ble_gatts_apps_register(void);
 void ble_gatts_set_mtu(void);
 
+
 #endif /* COMPONENTS_BLE_INCLUDE_BLE_GATTS_H_ */

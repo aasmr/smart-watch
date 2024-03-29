@@ -48,6 +48,7 @@ void ble_init(void)
     ble_gatts_register();
     ble_gap_register();
     ble_gatts_apps_register();
+    ble_gap_set_sec_param();
     ble_gatts_set_mtu();
 }
 

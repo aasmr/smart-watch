@@ -38,9 +38,6 @@ void app_main(void)
 	//Init app
 	watch_app_init(&spi, &tim);
 
-	//Start pherepherias, board and app
-	tim_start(&tim);
-
 	while(1)
 	{
     	if (xQueueReceive(queue, &ele, pdMS_TO_TICKS(1)))

@@ -754,6 +754,7 @@ void watch_app_worker(spi_device_handle_t* spi)
 
 void watch_app_init(spi_device_handle_t* spi, gptimer_handle_t* tim)
 {
+
 	watch.spi = spi;
 	watch.tim = tim;
 

@@ -12,7 +12,7 @@ static const char *TAG = "ble_gatts";
 uint8_t tyme_sync_service_uuid[ESP_UUID_LEN_128] = {0x95, 0xb8, 0x4b, 0xe1, 0xe4, 0x34, 0x35, 0x97, 0x4c, 0x40, 0x12, 0x91, 0xff, 0x4d, 0xa8, 0xfa};
 uint8_t tyme_sync_characteristic_uuid[ESP_UUID_LEN_128] = {0x95, 0xb8, 0x4b, 0xe1, 0xe4, 0x34, 0x35, 0x97, 0x4c, 0x40, 0x12, 0x91, 0xff, 0x4d, 0xa8, 0xfb};
 
-static void gatts_profile_rgb_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param);
+static void gatts_profile_time_sync_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param);
 
 struct gatts_profile_inst {
     esp_gatts_cb_t gatts_cb;
@@ -30,7 +30,7 @@ struct gatts_profile_inst {
 /* One gatt-based profile one app_id and one gatts_if, this array will store the gatts_if returned by ESP_GATTS_REG_EVT */
 static struct gatts_profile_inst gl_profile_tab[PROFILE_NUM] = {
     [PROFILE_TSYNC_APP_ID] = {
-        .gatts_cb = gatts_profile_rgb_event_handler,
+        .gatts_cb = gatts_profile_time_sync_event_handler,
         .gatts_if = ESP_GATT_IF_NONE,       /* Not get the gatt_if, so initial is ESP_GATT_IF_NONE */
     }
 };
@@ -84,7 +84,7 @@ static void handle_write_event(uint8_t * p_data, uint16_t len)
     watch_sync(h, m, s);
 }
 
-static void gatts_profile_rgb_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
+static void gatts_profile_time_sync_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
     switch (event) {
     case ESP_GATTS_REG_EVT:
         ESP_LOGI(TAG, "REGISTER_APP_EVT, status %d, app_id %d\n", param->reg.status, param->reg.app_id);
@@ -143,6 +143,7 @@ static void gatts_profile_rgb_event_handler(esp_gatts_cb_event_t event, esp_gatt
     case ESP_GATTS_STOP_EVT:
         break;
     case ESP_GATTS_CONNECT_EVT: {
+    	esp_ble_set_encryption(param->connect.remote_bda, ESP_BLE_SEC_ENCRYPT);
         esp_ble_conn_update_params_t conn_params = {0};
         memcpy(conn_params.bda, param->connect.remote_bda, sizeof(esp_bd_addr_t));
         /* For the IOS system, please reference the apple official documents about the ble connection parameters restrictions. */

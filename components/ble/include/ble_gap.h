@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "ble_adv.h"
+#include <inttypes.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -29,5 +30,6 @@
 #include "esp_gatt_common_api.h"
 
 void ble_gap_register(void);
+void ble_gap_set_sec_param(void);
 
 #endif /* COMPONENTS_BLE_INCLUDE_BLE_GAP_H_ */
