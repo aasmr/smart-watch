@@ -7,7 +7,7 @@
 #include "ble_adv.h"
 static const char *TAG = "ble_adv";
 
-#define DEVICE_NAME     "OSW-Test000"
+#define DEVICE_NAME     "PulsarAlpha-Test000"
 
 #define adv_config_flag      (1 << 0)
 static uint8_t adv_config_done = 0;
@@ -64,5 +64,3 @@ void ble_adv_set_complete_handle(void)
         esp_ble_gap_start_advertising(&adv_params);
     }
 }
-
-
